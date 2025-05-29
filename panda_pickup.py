@@ -4,6 +4,7 @@ import time
 import math
 import cv2
 import numpy as np
+from PIL import Image
 
 # pybullet GUI起動
 p.connect(p.GUI)
@@ -56,6 +57,27 @@ cv2.imwrite("panda_camera_image.png", rgb)
 cv2.imshow("Panda Camera", rgb)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+viewMatrix = p.computeViewMatrix(
+    cameraEyePosition=[1, 1, 1],
+    cameraTargetPosition=[0, 0, 0],
+    cameraUpVector=[0, 0, 1]
+)
+projectionMatrix = p.computeProjectionMatrixFOV(
+    fov=60,
+    aspect=1.0,
+    nearVal=0.1,
+    farVal=100.0
+)
+width, height, rgbImg, depthImg, segImg = p.getCameraImage(
+    width=512,
+    height=512,
+    viewMatrix=viewMatrix,
+    projectionMatrix=projectionMatrix
+)
+
+img = Image.fromarray(rgbImg)
+img.save("screenshot.png")
 
 p.disconnect()
 
