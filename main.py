@@ -46,7 +46,7 @@ def get_camera_image():
 
 
 # ===== 物体検出と分別処理 =====
-model = YOLO("runs/detect/train/weights/best.pt")
+model = YOLO("best.pt")
 processed_positions = []
 
 for loop_id in range(10):  # 最大10ループまで実行
@@ -98,6 +98,33 @@ for loop_id in range(10):  # 最大10ループまで実行
     # 7. 処理済み座標を記録
     processed_positions.append(world_pos)
 
+
+
+# ===== ログ記録 =====
+import csv
+# ループ前にログ初期化（ファイルが既にあれば上書き）
+with open("sorted_log.csv", mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(["loop_id", "u", "v", "color_name", "result"])
+# grasp成功/失敗後にログを記録
+with open("sorted_log.csv", mode='a', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow([loop_id, u, v, color_name, "success" if success else "fail"])
+# 5. grasp（成功するまでリトライ）
+success, picked_id = try_grasp_with_retries(panda_id, u, v, object_ids)
+
+# 6. graspの結果に応じて分別 or スキップ
+if success:
+    sort_object_by_color(panda_id, picked_id, color_name)
+
+# 7. ログ記録
+with open("sorted_log.csv", mode='a', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow([loop_id, u, v, color_name, "success" if success else "fail"])
+
+# 8. 成功した場合のみ処理済み位置として記録
+if success:
+    processed_positions.append(world_pos)
 
 p.disconnect()
 
