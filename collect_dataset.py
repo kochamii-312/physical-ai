@@ -24,7 +24,7 @@ colors = {
 }
 
 # 画像枚数
-n_images = 100
+n_images = 200
 
 for i in range(n_images):
     p.resetSimulation()

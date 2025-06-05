@@ -18,7 +18,7 @@ def pixel_to_world(u, v, depth=0.02, camera_config=None):
     z_world = z_cam
     return [x_world, y_world, z_world]
 
-def is_grasp_successful(panda_id, object_ids, threshold=0.03):
+def is_grasp_successful(panda_id, object_ids, threshold=0.1):
     # Pandaのエンドエフェクタ（リンク11）の位置
     ee_pos = p.getLinkState(panda_id, 11)[0]
     for obj_id in object_ids: 

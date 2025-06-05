@@ -1,0 +1,11 @@
+loop_id,target_object_id,picked_object_id,u,v,color_name,result_detail,result
+0,3,3,220,287,red,grasp_success_intended_obj_3_sort_success_obj_3,success
+1,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+2,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+3,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+4,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+5,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+6,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+7,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+8,4,N/A,420,287,blue,grasp_fail_obj_4,fail
+9,4,N/A,420,287,blue,grasp_fail_obj_4,fail
