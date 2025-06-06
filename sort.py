@@ -1,6 +1,4 @@
-import numpy as np
 import pybullet as p
-import pybullet_data
 import math
 from settings import HOME_JOINT_ANGLES, move_to_joint_position
 

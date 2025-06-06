@@ -1,9 +1,5 @@
 import pybullet as p
-import pybullet_data
 import numpy as np
-import time
-from settings import HOME_JOINT_ANGLES, move_to_joint_position
-
 def pixel_to_world(u, v, depth, view_matrix, projection_matrix):
 
     # 画面座標 → NDC（Normalized Device Coordinates）

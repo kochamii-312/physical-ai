@@ -1,14 +1,12 @@
 import pybullet as p
 import pybullet_data
 import time
-import math
 import cv2
 import csv
 import numpy as np
-from PIL import Image
 from ultralytics import YOLO
-from detect import class_id_to_name
-from grasp import pixel_to_world, bbox_to_world,try_grasp_with_retries
+from settings import class_id_to_name
+from grasp import bbox_to_world,try_grasp_with_retries
 from sort import sort_object_by_color
 
 # ===== 初期設定（pybullet GUI起動） =====
@@ -70,7 +68,7 @@ def get_camera_image():
 model = YOLO("best.pt")
 processed_positions = []
 processed_object_ids = set()
-# save_dir = "log/images"
+save_dir = "panda_view"
 
 # ログ初期化（ループ外で一度だけ）
 log_file_path = "sorted_log.csv"
@@ -93,7 +91,7 @@ for loop_id in range(10):  # 最大10ループまで実行
 
     # 1. カメラ画像取得・保存
     img = get_camera_image()
-    img_path = f"panda_view_loop{loop_id}.png"
+    img_path = f"{save_dir}/panda_view_loop{loop_id}.png"
     cv2.imwrite(img_path, img)
 
     # 2. YOLO推論

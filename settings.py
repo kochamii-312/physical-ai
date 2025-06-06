@@ -1,6 +1,12 @@
 import pybullet as p
 import time
 
+class_id_to_name = {
+    0: "red",
+    1: "green",
+    2: "blue"
+}
+
 # ===== Pandaアームの初期位置設定 =====
 HOME_JOINT_ANGLES = [0.0, -0.3, 0.0, -2.1, 0.0, 2.0, 0.8]
 import time
