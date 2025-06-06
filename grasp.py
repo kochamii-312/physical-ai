@@ -57,7 +57,7 @@ def bbox_to_world(x1, y1, x2, y2, depth, camera_position, camera_target):
     cam_point = np.array([x_cam, y_cam, z_cam, 1.0])
     world_point = inv_view @ cam_point
 
-    return [world_point[0]-0.3, world_point[1], 0.0]
+    return [world_point[0]-0.3, world_point[1]*100, 0.0]
 
 def is_grasp_successful(panda_id, object_ids, threshold=0.1):
     # Pandaのエンドエフェクタ（リンク11）の位置
@@ -71,23 +71,23 @@ def is_grasp_successful(panda_id, object_ids, threshold=0.1):
             return True, obj_id
     return False, None
 
-def try_grasp_with_retries(panda_id, detected_world_pos, object_ids, max_attempts=10):
+def try_grasp_with_retries(panda_id, detected_world_pos, object_ids, max_attempts=20):
     for attempt in range(max_attempts):
+        # 初期位置に戻る
+        # move_to_joint_position(panda_id, HOME_JOINT_ANGLES)
         # グリッパーを開く
         for j in [9, 10]:
-            p.setJointMotorControl2(panda_id, j, p.POSITION_CONTROL, targetPosition=0.04, force=10)
-        # 初期位置に戻る
-        move_to_joint_position(panda_id, HOME_JOINT_ANGLES)
+            p.setJointMotorControl2(panda_id, j, p.POSITION_CONTROL, targetPosition=0.04, force=10, maxVelocity=0.1)
         # 逆運動学でエンドエフェクタを移動
         joint_angles = p.calculateInverseKinematics(panda_id, endEffectorLinkIndex=11, targetPosition=detected_world_pos) 
         for i in range(len(joint_angles)):
-            p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i], force=100)
+            p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i], force=100, maxVelocity=0.1)
         for _ in range(100):  # 動作反映まで待つ
             p.stepSimulation()
 
         # グリッパーを閉じる
         for j in [9, 10]:
-            p.setJointMotorControl2(panda_id, j, p.POSITION_CONTROL, targetPosition=0.0, force=10)
+            p.setJointMotorControl2(panda_id, j, p.POSITION_CONTROL, targetPosition=0.0, force=10, maxVelocity=0.1)
         for _ in range(50):
             p.stepSimulation()
             # time.sleep(1. / 240.)  # PyBulletデフォルトのシミュレーション速度に合わせる

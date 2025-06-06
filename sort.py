@@ -29,14 +29,14 @@ def sort_object_by_color(panda_id, picked_id, color_name, drop_height=0.2):
     # 逆運動学で分別位置に移動
     joint_angles = p.calculateInverseKinematics(panda_id, 11, target_pos, target_orient)
     for i in range(len(joint_angles)):
-        p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i], force=100)
+        p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i], force=100, maxVelocity=0.1)
 
     for _ in range(100):
         p.stepSimulation()
 
     # グリッパーを開いて投下
     for j in [9, 10]:
-        p.setJointMotorControl2(panda_id, j, p.POSITION_CONTROL, targetPosition=0.04, force=10)
+        p.setJointMotorControl2(panda_id, j, p.POSITION_CONTROL, targetPosition=0.04, force=10, maxVelocity=0.1)
 
     for _ in range(50):
         p.stepSimulation()

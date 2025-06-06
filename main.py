@@ -23,7 +23,7 @@ panda_id = p.loadURDF("franka_panda/panda.urdf", useFixedBase=True)
 # 立方体オブジェクトを複数配置
 object_ids = []
 colors = [(0, 1, 0, 1), (1, 0, 0, 1), (0, 0, 1, 1), (1, 0, 0, 1), (1, 0, 0, 1)]
-positions = [[0.5, -0.2, 0.02], [0.5, -0.1, 0.02], [0.5, 0.0, 0.02], [0.5, 0.1, 0.02], [0.5, 0.2, 0.02]]
+positions = [[0.5, -0.4, 0.02], [0.5, -0.2, 0.02], [0.5, 0.0, 0.02], [0.5, 0.2, 0.02], [0.5, 0.4, 0.02]]
 for color, pos in zip(colors, positions):
     visual_shape = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.02]*3, rgbaColor=color)
     collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.02]*3)
