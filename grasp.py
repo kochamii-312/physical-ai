@@ -59,19 +59,24 @@ def bbox_to_world(x1, y1, x2, y2, depth, camera_position, camera_target):
 
     return [world_point[0]-0.3, world_point[1]*100, 0.0]
 
-def is_grasp_successful(panda_id, object_ids, threshold=0.1):
-    # Pandaのエンドエフェクタ（リンク11）の位置
-    ee_pos = p.getLinkState(panda_id, 11)[0]
-    for obj_id in object_ids: 
-        # オブジェクトの位置
-        obj_pos = p.getBasePositionAndOrientation(obj_id)[0]
-        # 距離で判定
-        dist = np.linalg.norm(np.array(ee_pos) - np.array(obj_pos))
-        if dist < threshold:
-            return True, obj_id
+def is_grasp_successful(panda_id, object_ids):
+    PANDA_FINGER_INDICES = [9, 10] # Pandaアームの指のリンクインデックス
+
+    for obj_id in object_ids:
+        # ロボット全体とオブジェクトの接触情報を取得
+        contact_points = p.getContactPoints(bodyA=panda_id, bodyB=obj_id)
+        
+        if len(contact_points) > 0:
+            for point in contact_points:
+                # 接触点が指のリンク(linkIndexA)で発生しているか確認
+                if point[3] in PANDA_FINGER_INDICES:
+                    # 指とオブジェクトが接触していれば成功、接触力が一定以上であるか(point[9])をチェック
+                    if point[9] > 0: # Normal Force > 0
+                        return True, obj_id
+                        
     return False, None
 
-def try_grasp_with_retries(panda_id, detected_world_pos, object_ids, max_attempts=20):
+def try_grasp_with_retries(panda_id, detected_world_pos, object_ids, max_attempts=50):
     for attempt in range(max_attempts):
         # 初期位置に戻る
         # move_to_joint_position(panda_id, HOME_JOINT_ANGLES)
