@@ -139,7 +139,11 @@ for loop_id in range(10):  # 最大10ループまで実行
                 best_match_obj_id = obj_id
 
         if best_match_obj_id != -1:
-            candidates.append((u, v, color_name, detected_world_pos, best_match_obj_id))
+            if best_match_obj_id not in processed_object_ids:
+                candidates.append((u, v, color_name, detected_world_pos, best_match_obj_id))
+                print(f"  候補追加: YOLO検出({color_name}) -> PyBullet ID: {best_match_obj_id}")
+            else:
+                print(f"  PyBullet ID {best_match_obj_id} はすでに処理済み、スキップします")
 
     # 一番近い物体から順に処理
     candidates.sort(key=lambda x: np.linalg.norm(np.array(x[3]) - np.array(p.getLinkState(panda_id, 11)[0])))
@@ -260,6 +264,7 @@ for loop_id in range(10):  # 最大10ループまで実行
             final_detail_message = f"{grasp_detail_message}_{sort_detail_message}"
             print(f"  物体 {actual_picked_id} は分別に失敗したため、未処理のままです。")
             # 安全のため、掴んでいるものを離す処理が必要な場合がある (sort_object_by_color内で処理されるか確認)
+        print(f"[DEBUG] candidates: {candidates}")
     else: # 把持に失敗した場合
         log_result_status = "fail"
         final_detail_message = grasp_detail_message
