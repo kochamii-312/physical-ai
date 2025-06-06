@@ -2,6 +2,7 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 import math
+from settings import HOME_JOINT_ANGLES, move_to_joint_position
 
 def sort_object_by_color(panda_id, picked_id, color_name, drop_height=0.2):
     """
@@ -16,9 +17,9 @@ def sort_object_by_color(panda_id, picked_id, color_name, drop_height=0.2):
 
     # 色ごとの分別位置を定義（y軸方向にずらす）
     sort_targets = {
-        "red":   [0.3, -0.2, drop_height],
-        "green": [0.3,  0.0, drop_height],
-        "blue":  [0.3,  0.2, drop_height]
+        "red":   [0.1, -0.2, drop_height],
+        "green": [0.1,  0.0, drop_height],
+        "blue":  [0.1,  0.2, drop_height]
     }
 
     # 移動先座標を取得
@@ -28,7 +29,7 @@ def sort_object_by_color(panda_id, picked_id, color_name, drop_height=0.2):
     # 逆運動学で分別位置に移動
     joint_angles = p.calculateInverseKinematics(panda_id, 11, target_pos, target_orient)
     for i in range(len(joint_angles)):
-        p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i], force=500)
+        p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i], force=100)
 
     for _ in range(100):
         p.stepSimulation()
@@ -45,13 +46,3 @@ def sort_object_by_color(panda_id, picked_id, color_name, drop_height=0.2):
     # 初期位置へ戻る
     move_to_joint_position(panda_id, HOME_JOINT_ANGLES)
     
-# ===== Pandaアームの初期位置設定 =====
-HOME_JOINT_ANGLES = [0.0, -0.3, 0.0, -2.1, 0.0, 2.0, 0.8]
-import time
-
-def move_to_joint_position(panda_id, joint_angles, steps=100):
-    for i in range(7):
-        p.setJointMotorControl2(panda_id, i, p.POSITION_CONTROL, joint_angles[i])
-    for _ in range(steps):
-        p.stepSimulation()
-        time.sleep(1.0 / 240.0)

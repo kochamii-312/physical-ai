@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 from ultralytics import YOLO
 from detect import class_id_to_name
-from grasp import pixel_to_world, try_grasp_with_retries
+from grasp import pixel_to_world, bbox_to_world,try_grasp_with_retries
 from sort import sort_object_by_color
 
 # ===== 初期設定（pybullet GUI起動） =====
@@ -22,8 +22,8 @@ panda_id = p.loadURDF("franka_panda/panda.urdf", useFixedBase=True)
 
 # 立方体オブジェクトを複数配置
 object_ids = []
-colors = [(1, 0, 0, 1), (0, 1, 0, 1), (0, 0, 1, 1)]
-positions = [[0.5, -0.1, 0.02], [0.5, 0.0, 0.02], [0.5, 0.1, 0.02]]
+colors = [(0, 1, 0, 1), (1, 0, 0, 1), (0, 0, 1, 1), (1, 0, 0, 1), (1, 0, 0, 1)]
+positions = [[0.5, -0.2, 0.02], [0.5, -0.1, 0.02], [0.5, 0.0, 0.02], [0.5, 0.1, 0.02], [0.5, 0.2, 0.02]]
 for color, pos in zip(colors, positions):
     visual_shape = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.02]*3, rgbaColor=color)
     collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.02]*3)
@@ -36,11 +36,32 @@ for color, pos in zip(colors, positions):
 
 
 # ===== カメラ画像取得関数 =====
+camera_position = [0.8, 0, 0.5] # カメラの位置
+camera_target = [0.4, 0, 0] # カメラの注視点
+camera_up_vector = [0, 0, 1] # カメラの上方向ベクトル
+# カメラパラメータ
+fov = 60 # 視野角
+aspect = 1.0 # アスペクト比
+nearVal = 0.01 # 近接クリッピング面
+farVal = 2 # 遠方クリッピング面
+def compute_view_matrix():
+    return p.computeViewMatrix(
+        cameraEyePosition=camera_position,
+        cameraTargetPosition=camera_target,
+        cameraUpVector=camera_up_vector
+    )
+def compute_projection_matrix():
+    return p.computeProjectionMatrixFOV(
+        fov=fov,
+        aspect=aspect,
+        nearVal=nearVal,
+        farVal=farVal
+    )
 def get_camera_image():
     width, height, rgb, _, _ = p.getCameraImage(
         640, 480,
-        viewMatrix=p.computeViewMatrix([0.8, 0, 0.5], [0.4, 0, 0], [0, 0, 1]),
-        projectionMatrix=p.computeProjectionMatrixFOV(60, 1.0, 0.01, 2)
+        viewMatrix=compute_view_matrix(),
+        projectionMatrix=compute_projection_matrix()
     )
     return np.reshape(rgb, (480, 640, 4))[:, :, :3]
 
@@ -79,62 +100,56 @@ for loop_id in range(10):  # 最大10ループまで実行
     results = model(img_path)[0]
     if len(results.boxes) == 0:
         print("YOLOが物体を検出しませんでした。")
-        with open(log_file_path, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([loop_id, "N/A", "N/A", "N/A", "N/A", "N/A", "yolo_no_detection", "fail"])
         time.sleep(1)
         break
 
     # 3. 検出された複数物体の中心座標を取得
-    candidates = [] # (u, v, color_name, class_id, detected_world_pos, pybullet_object_id)
-    
+    candidates = []
     # 現在シーンに物理的に存在する未処理のPyBulletオブジェクトIDリスト
-    current_unprocessed_pybullet_ids = [obj_id for obj_id in object_ids if obj_id not in processed_object_ids and p.getBasePositionAndOrientation(obj_id)[0][2] > -0.1] # 落下などで消えてないか簡易チェック
+    current_unprocessed_pybullet_ids = [
+        obj_id for obj_id in object_ids
+        if obj_id not in processed_object_ids and p.getBasePositionAndOrientation(obj_id)[0][2] > -0.1
+    ]
 
     for box in results.boxes:
         cls = int(box.cls[0].item())
         if cls not in class_id_to_name:
-            print(f"警告: 未知のクラスID {cls} が検出されました。スキップします。")
             continue
         color_name = class_id_to_name[cls]
         x1, y1, x2, y2 = box.xyxy[0].tolist()
         u = int((x1 + x2) / 2)
         v = int((y1 + y2) / 2)
-        
+
         try:
-            detected_world_pos = pixel_to_world(u, v) # (x,y,z)
-            if detected_world_pos is None: # pixel_to_world が失敗した場合
-                print(f"pixel_to_worldでNoneが返されました (u:{u}, v:{v})。スキップします。")
-                continue
+            detected_world_pos = bbox_to_world(x1, y1, x2, y2, depth=0.02, camera_position=camera_position, camera_target=camera_target)
         except Exception as e:
-            print(f"pixel_to_worldでエラー: {e} (u:{u}, v:{v})。スキップします。")
+            print(f"bbox_to_world failed: {e}")
             continue
 
-        # YOLOが検出した位置に最も近い、まだ処理されていないPyBulletオブジェクトを見つける
-        best_match_obj_id = -1
-        min_dist_to_detected_obj = 0.2 # 閾値: YOLO検出位置と実際のオブジェクト中心との許容ズレ[m]
+        print(f"検出: {color_name} @ pixel({u},{v}) -> world {np.round(detected_world_pos, 3)}")
 
-        for obj_id_in_scene in current_unprocessed_pybullet_ids:
-            obj_pos_scene, _ = p.getBasePositionAndOrientation(obj_id_in_scene)
-            # XY平面での距離で比較 (高さ(z)は変動しやすいため)
-            dist = np.linalg.norm(np.array(detected_world_pos[:2]) - np.array(obj_pos_scene[:2]))
-            
-            print(f"  チェック中: PyBullet ID {obj_id_in_scene} (シーン内位置XY: {np.round(obj_pos_scene[:2], 3)}), YOLO検出との距離XY: {dist:.4f}")
-            
-            if dist < min_dist_to_detected_obj:
-                # 既にこのPyBulletオブジェクトが他のYOLO検出で候補になっていないか確認
-                is_already_candidate = any(cand_obj_id == obj_id_in_scene for _, _, _, _, _, cand_obj_id in candidates)
-                if not is_already_candidate:
-                    min_dist_to_detected_obj = dist # より近いものが見つかれば更新 (現在は最初のマッチを採用するロジックになっているので、この行は実質不要)
-                    best_match_obj_id = obj_id_in_scene
-                    break # このPyBulletオブジェクトをこのYOLO検出に紐づけ
+        # 対象オブジェクト候補の中から最も近いPyBulletオブジェクトを探す
+        best_match_obj_id = -1
+        min_dist = float('inf')
+        for obj_id in current_unprocessed_pybullet_ids:
+            obj_pos, _ = p.getBasePositionAndOrientation(obj_id)
+            dist = np.linalg.norm(np.array(detected_world_pos[:2]) - np.array(obj_pos[:2]))
+            if dist < min_dist:
+                min_dist = dist
+                best_match_obj_id = obj_id
 
         if best_match_obj_id != -1:
-            candidates.append((u, v, color_name, cls, detected_world_pos, best_match_obj_id))
-            print(f"  候補追加: YOLO検出(u:{u},v:{v},色:{color_name}) -> PyBullet ID:{best_match_obj_id}, 検出ワールド位置:{np.round(detected_world_pos,3)}")
-        else:
-            print(f"  YOLO検出 {color_name} (u:{u},v:{v}) に対する有効なPyBulletオブジェクトが見つかりませんでした。(閾値: {min_dist_to_detected_obj}m), 検出位置: {np.round(detected_world_pos, 3 if detected_world_pos is not None else 0)}")
+            candidates.append((u, v, color_name, detected_world_pos, best_match_obj_id))
 
+    # 一番近い物体から順に処理
+    candidates.sort(key=lambda x: np.linalg.norm(np.array(x[3]) - np.array(p.getLinkState(panda_id, 11)[0])))
+
+    for (u, v, color_name, detected_world_pos, obj_id) in candidates:
+        success, picked_id = try_grasp_with_retries(panda_id, detected_world_pos, [obj_id])
+        if success:
+            sort_object_by_color(panda_id, picked_id, color_name)
+            processed_object_ids.add(picked_id)
+            break  # 1ループ1物体のみ処理
 
     if not candidates:
         print("未処理の物体に対する有効な検出候補が見つかりませんでした。")
@@ -147,15 +162,13 @@ for loop_id in range(10):  # 最大10ループまで実行
 
     # 4. Pandaに最も近い物体を選ぶ
     ee_link_state = p.getLinkState(panda_id, 11)
-    if ee_link_state is None:
-        print("エラー: エンドエフェクタの状態を取得できませんでした。")
-        continue
     ee_pos = ee_link_state[0]
     
     nearest_candidate_info = None
     min_dist_to_ee = float('inf')
 
-    for cand_u, cand_v, cand_color, cand_cls, cand_detected_wp, cand_obj_id in candidates:
+    for cand_u, cand_v, cand_color, cand_detected_wp, cand_obj_id in candidates:
+        # オブジェクトの実際の位置とエンドエフェクタの位置を比較
         obj_actual_pos, _ = p.getBasePositionAndOrientation(cand_obj_id)
         dist = np.linalg.norm(np.array(obj_actual_pos) - np.array(ee_pos))
         if dist < min_dist_to_ee:
@@ -185,7 +198,7 @@ for loop_id in range(10):  # 最大10ループまで実行
     grasp_detail_message = ""
     
     try:
-        success_grasp, actual_picked_id = try_grasp_with_retries(panda_id, u_target, v_target, [object_id_to_try_grasp])
+        success_grasp, actual_picked_id = try_grasp_with_retries(panda_id, detected_world_pos, [object_id_to_try_grasp])
         
         if success_grasp:
             if actual_picked_id == object_id_to_try_grasp:
@@ -195,7 +208,7 @@ for loop_id in range(10):  # 最大10ループまで実行
                 # 意図しないものを掴んだ場合 (try_grasp_with_retries が対象を絞れなかった場合など)
                 grasp_detail_message = f"grasp_success_unexpected_obj_{actual_picked_id}_expected_{object_id_to_try_grasp}"
                 print(f"  把持成功: ID {actual_picked_id} (ターゲット {object_id_to_try_grasp} と異なる！)")
-                # この場合、掴んだ actual_picked_id が未処理なら処理済みとして扱う
+                # 掴んだ actual_picked_id が未処理なら処理済みとして扱う
                 if actual_picked_id in object_ids and actual_picked_id not in processed_object_ids:
                      pass # 後続の処理で actual_picked_id を処理済みにする
                 else: # 掴んだものが既に処理済みか、そもそもリストにない不正なIDの場合
@@ -247,7 +260,6 @@ for loop_id in range(10):  # 最大10ループまで実行
             final_detail_message = f"{grasp_detail_message}_{sort_detail_message}"
             print(f"  物体 {actual_picked_id} は分別に失敗したため、未処理のままです。")
             # 安全のため、掴んでいるものを離す処理が必要な場合がある (sort_object_by_color内で処理されるか確認)
-            # p.removeConstraint(...) など
     else: # 把持に失敗した場合
         log_result_status = "fail"
         final_detail_message = grasp_detail_message
